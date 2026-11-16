@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SellingMode {
+  in_stock
+  preorder
+  out_of_stock
+}
+
+enum OrderStatus {
+  new
+  confirmed
+  packed
+  shipped
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cod
+  bank_transfer
+  instagram
+}
+
+enum OrderChannel {
+  site
+  instagram
+}
+
+enum AddressKind {
+  yerevan
+  marz
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  slug     String     @unique
+  name     Json
+  sort     Int        @default(0)
+  products Product[]
+}
+
+model Product {
+  id          String         @id @default(cuid())
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id])
+  slug        String         @unique
+  name        Json
+  description Json
+  published   Boolean        @default(true)
+  variants    Variant[]
+  images      ProductImage[]
+}
+
+model Variant {
+  id            String         @id @default(cuid())
+  productId     String
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku           String         @unique
+  priceAmd      Int
+  stockQty      Int            @default(0)
+  sellingMode   SellingMode
+  preorderLimit Int?
+  label         Json
+  images        ProductImage[]
+  cartItems     CartItem[]
+  orderLines    OrderLine[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   Variant? @relation(fields: [variantId], references: [id])
+  url       String
+  sort      Int      @default(0)
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  qty       Int
+
+  @@unique([cartId, variantId])
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  customerName   String
+  phone          String
+  email          String?
+  addressKind    AddressKind
+  district       String
+  addressLine    String
+  paymentMethod  PaymentMethod
+  status         OrderStatus   @default(new)
+  channel        OrderChannel
+  clubCodeId     String?
+  clubCode       ClubCode?     @relation(fields: [clubCodeId], references: [id])
+  cashbackAmd    Int           @default(0)
+  deliveryFeeAmd Int           @default(0)
+  deliveryZoneId String?
+  deliveryZone   DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  placedAt       DateTime      @default(now())
+  lines          OrderLine[]
+}
+
+model OrderLine {
+  id             String      @id @default(cuid())
+  orderId        String
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId      String
+  variant        Variant     @relation(fields: [variantId], references: [id])
+  productName    String
+  variantLabel   String
+  qty            Int
+  priceAmd       Int
+  sellingMode    SellingMode
+  promisedShipOn DateTime?
+}
+
+model ClubPartner {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  logoUrl     String?
+  accent      String
+  cashbackBps Int        @default(0)
+  validUntil  DateTime
+  message     String     @default("")
+  codes       ClubCode[]
+}
+
+model ClubCode {
+  id        String      @id @default(cuid())
+  partnerId String
+  partner   ClubPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  code      String      @unique
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  orders    Order[]
+}
+
+model DeliveryZone {
+  id     String  @id @default(cuid())
+  name   Json
+  feeAmd Int
+  etaDays Int
+  orders Order[]
+}
+
+model Page {
+  id    String @id @default(cuid())
+  slug  String @unique
+  title Json
+  body  Json
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model AdminUser {
+  id           String @id @default(cuid())
+  email        String @unique
+  passwordHash String
+}
