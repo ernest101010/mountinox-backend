@@ -38,6 +38,31 @@ enum AddressKind {
   marz
 }
 
+enum AdminRole {
+  owner
+  manager
+  staff
+}
+
+enum PurchaseStatus {
+  draft
+  ordered
+  received
+  cancelled
+}
+
+enum ReturnStatus {
+  requested
+  received
+  refunded
+  rejected
+}
+
+enum CouponKind {
+  percent
+  fixed
+}
+
 model Category {
   id       String     @id @default(cuid())
   parentId String?
@@ -49,6 +74,12 @@ model Category {
   products Product[]
 }
 
+model Brand {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
 model Product {
   id          String         @id @default(cuid())
   categoryId  String
@@ -57,6 +88,8 @@ model Product {
   name        Json
   description Json
   published   Boolean        @default(true)
+  brandId     String?
+  brand       Brand?         @relation(fields: [brandId], references: [id])
   variants    Variant[]
   images      ProductImage[]
 }
@@ -70,10 +103,14 @@ model Variant {
   stockQty      Int            @default(0)
   sellingMode   SellingMode
   preorderLimit Int?
+  barcode       String?
+  costAmd       Int            @default(0)
   label         Json
   images        ProductImage[]
   cartItems     CartItem[]
   orderLines    OrderLine[]
+  movements     StockMovement[]
+  purchaseLines PurchaseLine[]
 }
 
 model ProductImage {
@@ -123,7 +160,13 @@ model Order {
   deliveryZoneId String?
   deliveryZone   DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
   placedAt       DateTime      @default(now())
+  customerId     String?
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  couponId       String?
+  coupon         Coupon?       @relation(fields: [couponId], references: [id])
+  discountAmd    Int           @default(0)
   lines          OrderLine[]
+  returns        ReturnOrder[]
 }
 
 model OrderLine {
@@ -183,7 +226,107 @@ model Setting {
 }
 
 model AdminUser {
-  id           String @id @default(cuid())
-  email        String @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
+  name         String    @default("")
+  role         AdminRole @default(owner)
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  email     String?
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Warehouse {
+  id        String          @id @default(cuid())
+  name      String
+  movements StockMovement[]
+  purchases PurchaseOrder[]
+}
+
+model StockMovement {
+  id          String    @id @default(cuid())
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  variantId   String
+  variant     Variant   @relation(fields: [variantId], references: [id])
+  qty         Int
+  reason      String
+  ref         String?
+  createdAt   DateTime  @default(now())
+}
+
+model Supplier {
+  id       String          @id @default(cuid())
+  name     String
+  email    String?
+  phone    String?
+  notes    String          @default("")
+  orders   PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          String         @id @default(cuid())
+  number      String         @unique
+  supplierId  String
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  warehouseId String
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
+  status      PurchaseStatus @default(draft)
+  createdAt   DateTime       @default(now())
+  lines       PurchaseLine[]
+}
+
+model PurchaseLine {
+  id        String        @id @default(cuid())
+  orderId   String
+  order     PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   Variant       @relation(fields: [variantId], references: [id])
+  qty       Int
+  costAmd   Int
+}
+
+model ReturnOrder {
+  id        String       @id @default(cuid())
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id])
+  status    ReturnStatus @default(requested)
+  restock   Boolean      @default(true)
+  note      String       @default("")
+  refundAmd Int          @default(0)
+  createdAt DateTime     @default(now())
+  lines     ReturnLine[]
+}
+
+model ReturnLine {
+  id          String      @id @default(cuid())
+  returnId    String
+  returnOrder ReturnOrder @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderLineId String
+  qty         Int
+}
+
+model Coupon {
+  id       String     @id @default(cuid())
+  code     String     @unique
+  kind     CouponKind
+  value    Int
+  startsAt DateTime?
+  endsAt   DateTime?
+  active   Boolean    @default(true)
+  orders   Order[]
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  title     String
+  amountAmd Int
+  spentOn   DateTime @default(now())
+  note      String   @default("")
 }

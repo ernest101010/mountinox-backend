@@ -20,6 +20,7 @@ export type CheckoutInput = {
   paymentMethod: "cod" | "bank_transfer";
   deliveryZoneId: string;
   clubCode?: string;
+  couponCode?: string;
 };
 
 @Injectable()
@@ -83,6 +84,8 @@ export class OrdersService {
         });
       }
       const number = await this.nextNumber(tx);
+      const coupon = await this.resolveCoupon(tx, input.couponCode, subtotal);
+      const customer = await this.upsertCustomer(tx, input.customerName, input.phone, input.email);
       const order = await tx.order.create({
         data: {
           number,
@@ -99,11 +102,28 @@ export class OrdersService {
           cashbackAmd: club ? cashbackFromSubtotal(subtotal, club.partner.cashbackBps) : 0,
           deliveryFeeAmd: zone.feeAmd,
           deliveryZoneId: zone.id,
+          customerId: customer.id,
+          couponId: coupon?.id,
+          discountAmd: coupon?.discountAmd ?? 0,
           placedAt,
           lines: { create: lines },
         },
         include: orderInclude,
       });
+      const warehouse = await this.mainWarehouse(tx);
+      for (const item of cart.items) {
+        if (item.variant.sellingMode === "in_stock") {
+          await tx.stockMovement.create({
+            data: {
+              warehouseId: warehouse.id,
+              variantId: item.variant.id,
+              qty: -item.qty,
+              reason: "order",
+              ref: order.number,
+            },
+          });
+        }
+      }
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       return order;
     });
@@ -118,6 +138,8 @@ export class OrdersService {
     clubCode?: string;
     district: string;
     addressLine: string;
+    couponCode?: string;
+    email?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const club = await this.resolveClub(tx, input.clubCode);
@@ -141,11 +163,14 @@ export class OrdersService {
           promisedShipOn: variant.sellingMode === "preorder" ? addDays(placedAt, lead) : null,
         });
       }
+      const coupon = await this.resolveCoupon(tx, input.couponCode, subtotal);
+      const customer = await this.upsertCustomer(tx, input.customerName, input.phone, input.email);
       return tx.order.create({
         data: {
           number: await this.nextNumber(tx),
           customerName: input.customerName,
           phone: input.phone,
+          email: input.email,
           addressKind: "yerevan",
           district: input.district,
           addressLine: input.addressLine,
@@ -154,6 +179,9 @@ export class OrdersService {
           status: input.status,
           clubCodeId: club?.id,
           cashbackAmd: club ? cashbackFromSubtotal(subtotal, club.partner.cashbackBps) : 0,
+          customerId: customer.id,
+          couponId: coupon?.id,
+          discountAmd: coupon?.discountAmd ?? 0,
           placedAt,
           lines: { create: lines },
         },
@@ -170,6 +198,16 @@ export class OrdersService {
         for (const line of order.lines) {
           if (line.sellingMode === "in_stock") {
             await tx.variant.update({ where: { id: line.variantId }, data: { stockQty: { increment: line.qty } } });
+            const warehouse = await this.mainWarehouse(tx);
+            await tx.stockMovement.create({
+              data: {
+                warehouseId: warehouse.id,
+                variantId: line.variantId,
+                qty: line.qty,
+                reason: "cancel",
+                ref: order.number,
+              },
+            });
           }
         }
       }
@@ -210,6 +248,32 @@ export class OrdersService {
       throw new BadRequestException("Invalid club code");
     }
     return clubCode;
+  }
+
+  private async upsertCustomer(tx: Prisma.TransactionClient, name: string, phone: string, email?: string) {
+    return tx.customer.upsert({
+      where: { phone },
+      create: { name, phone, email },
+      update: { name, ...(email ? { email } : {}) },
+    });
+  }
+
+  private async resolveCoupon(tx: Prisma.TransactionClient, code: string | undefined, subtotal: number) {
+    if (!code) return null;
+    const coupon = await tx.coupon.findFirst({ where: { code, active: true } });
+    if (!coupon) throw new BadRequestException("Invalid coupon");
+    const now = new Date();
+    if (coupon.startsAt && coupon.startsAt > now) throw new BadRequestException("Coupon is not active yet");
+    if (coupon.endsAt && coupon.endsAt < now) throw new BadRequestException("Coupon has expired");
+    const discountAmd =
+      coupon.kind === "percent" ? Math.round((subtotal * coupon.value) / 100) : Math.min(coupon.value, subtotal);
+    return { id: coupon.id, discountAmd };
+  }
+
+  private async mainWarehouse(tx: Prisma.TransactionClient) {
+    const existing = await tx.warehouse.findFirst({ orderBy: { name: "asc" } });
+    if (existing) return existing;
+    return tx.warehouse.create({ data: { name: "Main" } });
   }
 
   private async nextNumber(tx: Prisma.TransactionClient) {

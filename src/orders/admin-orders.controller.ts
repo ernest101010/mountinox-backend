@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { OrderStatus } from "@prisma/client";
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, Min, ValidateNested } from "class-validator";
+import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsEnum, IsInt, IsOptional, IsString, Min, ValidateNested } from "class-validator";
 import { JwtGuard } from "../auth/jwt.guard";
 import { OrdersService } from "./orders.service";
 
@@ -18,6 +18,8 @@ class InstagramOrderDto {
   @IsString() district!: string;
   @IsString() addressLine!: string;
   @IsOptional() @IsString() clubCode?: string;
+  @IsOptional() @IsString() couponCode?: string;
+  @IsOptional() @IsEmail() email?: string;
   @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LineDto) lines!: LineDto[];
 }
 

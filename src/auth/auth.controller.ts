@@ -24,10 +24,10 @@ export class AuthController {
       throw new UnauthorizedException("Invalid credentials");
     }
     const token = jwt.sign(
-      { sub: user.id, email: user.email },
+      { sub: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET ?? "dev-only-change-me",
       { expiresIn: "7d" },
     );
-    return { token, email: user.email };
+    return { token, email: user.email, role: user.role, name: user.name };
   }
 }

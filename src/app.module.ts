@@ -11,6 +11,9 @@ import { AdminOrdersController } from "./orders/admin-orders.controller";
 import { ClubCodesController } from "./clubs/club-codes.controller";
 import { AdminClubsController } from "./clubs/admin-clubs.controller";
 import { AdminContentController, ContentController } from "./content/content.controller";
+import { RolesGuard } from "./auth/roles.guard";
+import { OpsController } from "./ops/ops.controller";
+import { OpsService } from "./ops/ops.service";
 
 @Module({
   controllers: [
@@ -24,7 +27,8 @@ import { AdminContentController, ContentController } from "./content/content.con
     AdminClubsController,
     ContentController,
     AdminContentController,
+    OpsController,
   ],
-  providers: [PrismaService, CatalogService, OrdersService],
+  providers: [PrismaService, CatalogService, OrdersService, OpsService, RolesGuard],
 })
 export class AppModule {}

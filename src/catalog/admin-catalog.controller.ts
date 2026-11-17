@@ -33,6 +33,7 @@ class ProductDto {
   @IsObject() name!: TranslationDto;
   @IsObject() description!: TranslationDto;
   @IsBoolean() published!: boolean;
+  @IsOptional() @IsString() brandId?: string;
 }
 
 class VariantDto {
@@ -42,6 +43,8 @@ class VariantDto {
   @Type(() => Number) @IsInt() @Min(0) stockQty!: number;
   @IsEnum(SellingMode) sellingMode!: SellingMode;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) preorderLimit?: number;
+  @IsOptional() @IsString() barcode?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) costAmd?: number;
   @IsObject() label!: TranslationDto;
 }
 

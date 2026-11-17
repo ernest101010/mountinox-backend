@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma.service";
 
 const productInclude = {
   category: true,
+  brand: true,
   images: { orderBy: { sort: "asc" as const } },
   variants: { orderBy: { sku: "asc" as const }, include: { images: true } },
 };
@@ -65,13 +66,21 @@ export class CatalogService {
     name: Translation;
     description: Translation;
     published: boolean;
+    brandId?: string | null;
   }) {
     return this.prisma.product.create({ data, include: productInclude });
   }
 
   updateProduct(
     id: string,
-    data: Partial<{ categoryId: string; slug: string; name: Translation; description: Translation; published: boolean }>,
+    data: Partial<{
+      categoryId: string;
+      slug: string;
+      name: Translation;
+      description: Translation;
+      published: boolean;
+      brandId: string | null;
+    }>,
   ) {
     return this.prisma.product.update({ where: { id }, data, include: productInclude });
   }
@@ -87,6 +96,8 @@ export class CatalogService {
     stockQty: number;
     sellingMode: SellingMode;
     preorderLimit?: number;
+    barcode?: string;
+    costAmd?: number;
     label: Translation;
   }) {
     return this.prisma.variant.create({ data });
@@ -100,6 +111,8 @@ export class CatalogService {
       stockQty: number;
       sellingMode: SellingMode;
       preorderLimit: number | null;
+      barcode: string | null;
+      costAmd: number;
       label: Translation;
     }>,
   ) {

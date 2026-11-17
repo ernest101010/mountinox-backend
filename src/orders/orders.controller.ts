@@ -13,6 +13,7 @@ class CheckoutDto {
   @IsIn(["cod", "bank_transfer"]) paymentMethod!: "cod" | "bank_transfer";
   @IsString() deliveryZoneId!: string;
   @IsOptional() @IsString() clubCode?: string;
+  @IsOptional() @IsString() couponCode?: string;
 }
 
 @Controller()
