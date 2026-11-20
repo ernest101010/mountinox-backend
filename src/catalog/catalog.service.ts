@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma, SellingMode } from "@prisma/client";
 import { Translation } from "../shared";
 import { PrismaService } from "../prisma.service";
+import { CatalogFilters, CatalogSort, queryCatalog } from "./catalog-query";
 
 const productInclude = {
   category: true,
@@ -33,6 +34,11 @@ export class CatalogService {
       const haystack = JSON.stringify(product.name).toLowerCase();
       return haystack.includes(query.q.toLowerCase());
     });
+  }
+
+  async catalog(filters: CatalogFilters, options: { sort: CatalogSort; page: number; pageSize: number }) {
+    const rows = await this.prisma.product.findMany({ where: { published: true }, include: productInclude });
+    return queryCatalog(rows, filters, options);
   }
 
   productBySlug(slug: string) {

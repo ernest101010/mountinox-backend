@@ -11,6 +11,7 @@ import { AdminOrdersController } from "./orders/admin-orders.controller";
 import { ClubCodesController } from "./clubs/club-codes.controller";
 import { AdminClubsController } from "./clubs/admin-clubs.controller";
 import { AdminContentController, ContentController } from "./content/content.controller";
+import { NewsletterController } from "./content/newsletter.controller";
 import { RolesGuard } from "./auth/roles.guard";
 import { OpsController } from "./ops/ops.controller";
 import { OpsService } from "./ops/ops.service";
@@ -27,6 +28,7 @@ import { OpsService } from "./ops/ops.service";
     AdminClubsController,
     ContentController,
     AdminContentController,
+    NewsletterController,
     OpsController,
   ],
   providers: [PrismaService, CatalogService, OrdersService, OpsService, RolesGuard],

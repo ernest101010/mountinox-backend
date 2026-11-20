@@ -1,30 +1,17 @@
 import { PrismaClient, SellingMode } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { brandSeeds, categorySeeds, productSeeds, tr } from "./seed-catalog";
 
 const prisma = new PrismaClient();
 
-function tr(en: string, ru = en, hy = en) {
-  return { hy, ru, en };
+function assertSafeTarget() {
+  const host = new URL(process.env.DATABASE_URL ?? "").hostname;
+  if (["localhost", "127.0.0.1", "::1"].includes(host) || process.env.SEED_ALLOW_REMOTE === "1") return;
+  throw new Error(`Refusing to seed ${host}: the seed wipes all data. Set SEED_ALLOW_REMOTE=1 to seed a remote database.`);
 }
 
-const products: { slug: string; en: string; sold: number; mode: SellingMode; price: number; category: string }[] = [
-  { slug: "backpack", en: "Backpack", sold: 6, mode: "in_stock", price: 45000, category: "packs" },
-  { slug: "qartal-boots", en: "Qartal Boots (Hiking + Mountaineering)", sold: 5, mode: "in_stock", price: 89000, category: "footwear" },
-  { slug: "scarf-buff", en: "Scarf / Buff", sold: 5, mode: "preorder", price: 8000, category: "accessories" },
-  { slug: "sunglasses", en: "Sunglasses / Glasses", sold: 4, mode: "in_stock", price: 18000, category: "accessories" },
-  { slug: "double-jacket", en: "Double Jacket", sold: 2, mode: "preorder", price: 72000, category: "apparel" },
-  { slug: "trekking-poles", en: "Trekking Poles", sold: 2, mode: "in_stock", price: 24000, category: "accessories" },
-  { slug: "gaiter", en: "Gaiter", sold: 2, mode: "preorder", price: 12000, category: "footwear" },
-  { slug: "fleece", en: "Fleece / Polar Half-Zip", sold: 2, mode: "in_stock", price: 32000, category: "apparel" },
-  { slug: "shoes", en: "Shoes", sold: 1, mode: "preorder", price: 54000, category: "footwear" },
-  { slug: "waterproof-jacket", en: "Waterproof Jacket", sold: 1, mode: "in_stock", price: 68000, category: "apparel" },
-  { slug: "jacket", en: "Jacket", sold: 1, mode: "preorder", price: 61000, category: "apparel" },
-  { slug: "gloves", en: "Gloves", sold: 1, mode: "in_stock", price: 9000, category: "accessories" },
-  { slug: "thermos", en: "Thermos", sold: 1, mode: "preorder", price: 15000, category: "accessories" },
-  { slug: "pants", en: "Pants", sold: 1, mode: "out_of_stock", price: 28000, category: "apparel" },
-];
-
 async function main() {
+  assertSafeTarget();
   await prisma.orderLine.deleteMany();
   await prisma.order.deleteMany();
   await prisma.cartItem.deleteMany();
@@ -32,6 +19,7 @@ async function main() {
   await prisma.productImage.deleteMany();
   await prisma.variant.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.brand.deleteMany();
   await prisma.category.deleteMany();
   await prisma.clubCode.deleteMany();
   await prisma.clubPartner.deleteMany();
@@ -67,51 +55,68 @@ async function main() {
     ["returns", "Returns", "Unused items can be returned within 14 days."],
     ["contacts", "Contacts", "Mountinox hike shop, Yerevan."],
     ["privacy", "Privacy", "We use your phone number only to fulfill the order."],
+    ["terms", "Terms", "Orders are confirmed by phone before shipping."],
+    ["size-guide", "Size guide", "Measure chest, waist and inseam, then compare with each product's size table."],
+    ["care", "Gear care", "Clean, dry fully and store loosely to keep your gear trail-ready for years."],
+    ["about", "Our story", "Mountinox is an outdoor equipment shop from Yerevan, built by people who hike."],
+    ["approach", "Our approach", "Fewer, better things: gear we have tested and would carry ourselves."],
+    ["the-long-way", "Why we take the long way", "Slower routes, better views, and what we pack for them."],
+    ["pack-less", "Pack less, see more", "Building a lighter kit without giving up comfort."],
+    ["night-under-the-stars", "A night under the stars", "Our first-night camping checklist."],
   ] as const;
   for (const [slug, title, body] of pages) {
     await prisma.page.create({ data: { slug, title: tr(title), body: tr(body) } });
   }
 
   const categories = await Promise.all(
-    [
-      ["packs", "Packs"],
-      ["footwear", "Footwear"],
-      ["apparel", "Apparel"],
-      ["accessories", "Accessories"],
-    ].map(([slug, name], sort) =>
-      prisma.category.create({ data: { slug, name: tr(name), sort } }),
-    ),
+    categorySeeds.map((category, sort) => prisma.category.create({ data: { ...category, sort } })),
   );
   const categoryId = Object.fromEntries(categories.map((category) => [category.slug, category.id]));
 
-  const variants = new Map<string, { id: string; price: number; mode: SellingMode }>();
-  for (const product of products) {
+  const brands = await Promise.all(brandSeeds.map((name) => prisma.brand.create({ data: { name } })));
+  const brandId = Object.fromEntries(brands.map((brand) => [brand.name, brand.id]));
+
+  const variants = new Map<string, { id: string; label: string; price: number; mode: SellingMode }>();
+  for (const product of productSeeds) {
     const created = await prisma.product.create({
       data: {
         categoryId: categoryId[product.category],
+        brandId: product.brand ? brandId[product.brand] : null,
         slug: product.slug,
-        name: tr(product.en),
-        description: tr(`${product.en} from Mountinox.`),
+        name: tr(product.name),
+        description: product.tagline,
+        tagline: product.tagline,
+        specs: tr(product.specs),
+        season: product.season,
+        features: product.features,
+        featured: product.featured,
+        ratingAvg: product.rating,
+        ratingCount: product.ratingCount,
         published: true,
         variants: {
-          create: {
-            sku: product.slug,
+          create: product.sizes.map((size, index) => ({
+            sku: `${product.slug}-${String(index + 1).padStart(2, "0")}`,
             priceAmd: product.price,
             stockQty: product.mode === "in_stock" ? 12 : 0,
             sellingMode: product.mode,
             preorderLimit: product.mode === "preorder" ? 20 : null,
-            label: tr("One size"),
-          },
+            label: tr(size),
+          })),
         },
-        images: { create: { url: `https://placehold.co/800x800?text=${encodeURIComponent(product.en)}`, sort: 0 } },
+        images: { create: { url: `/products/${product.slug}.jpg`, sort: 0 } },
       },
-      include: { variants: true },
+      include: { variants: { orderBy: { sku: "asc" } } },
     });
-    variants.set(product.slug, { id: created.variants[0].id, price: product.price, mode: product.mode === "out_of_stock" ? "in_stock" : product.mode });
+    variants.set(product.slug, {
+      id: created.variants[0].id,
+      label: product.sizes[0],
+      price: product.price,
+      mode: product.mode === "out_of_stock" ? "in_stock" : product.mode,
+    });
   }
 
   let orderIndex = 0;
-  for (const product of products) {
+  for (const product of productSeeds) {
     const variant = variants.get(product.slug);
     if (!variant) continue;
     const placedAt = new Date(Date.UTC(2026, 10, 2 + (orderIndex % 14), 9, 0, 0));
@@ -132,8 +137,8 @@ async function main() {
         lines: {
           create: {
             variantId: variant.id,
-            productName: product.en,
-            variantLabel: "One size",
+            productName: product.name,
+            variantLabel: variant.label,
             qty: product.sold,
             priceAmd: product.price,
             sellingMode: variant.mode,

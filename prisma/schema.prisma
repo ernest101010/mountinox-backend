@@ -64,6 +64,12 @@ enum CouponKind {
   fixed
 }
 
+enum Season {
+  three_season
+  winter
+  all_season
+}
+
 model Category {
   id       String     @id @default(cuid())
   parentId String?
@@ -72,6 +78,7 @@ model Category {
   slug     String     @unique
   name     Json
   sort     Int        @default(0)
+  imageUrl String?
   products Product[]
 }
 
@@ -91,6 +98,13 @@ model Product {
   published   Boolean        @default(true)
   brandId     String?
   brand       Brand?         @relation(fields: [brandId], references: [id])
+  tagline     Json?
+  specs       Json?
+  season      Season?
+  features    String[]       @default([])
+  featured    Boolean        @default(false)
+  ratingAvg   Float?
+  ratingCount Int            @default(0)
   variants    Variant[]
   images      ProductImage[]
 }
@@ -322,6 +336,13 @@ model Coupon {
   endsAt   DateTime?
   active   Boolean    @default(true)
   orders   Order[]
+}
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  locale    String
+  createdAt DateTime @default(now())
 }
 
 model Expense {
